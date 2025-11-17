@@ -1,0 +1,2 @@
+# locations
+frigate mcp
