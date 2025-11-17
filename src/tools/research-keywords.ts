@@ -9,10 +9,27 @@ import { logger } from '../services/logger.js';
 import { KeywordResearchResult, MCPError, Keyword } from '../types/index.js';
 
 const inputSchema = z.object({
-  title: z.string(),
-  content: z.string(),
+  title: z.string().min(3),
+  content: z.string().max(100_000),
   cluster: z.boolean().optional(),
 });
+
+export const researchKeywordsSchema = {
+  type: 'object',
+  properties: {
+    title: { type: 'string', minLength: 3, description: 'Title of the source content' },
+    content: {
+      type: 'string',
+      description: 'Full text of the content (max 100KB)',
+      maxLength: 100_000,
+    },
+    cluster: {
+      type: 'boolean',
+      description: 'Whether to group related keywords into clusters',
+    },
+  },
+  required: ['title', 'content'],
+};
 
 export type ResearchKeywordsInput = z.infer<typeof inputSchema>;
 
@@ -42,9 +59,14 @@ export const researchKeywords = async (
     const enriched: Keyword[] = [];
     for (const keyword of suggestions) {
       const intent = intentClassifier.classify(keyword);
-      const trend = await trendClient.getTrendData(keyword.phrase);
-      enriched.push({ ...keyword, intent, trendScore: trend.trendScore });
-      enriched.push(...trend.related);
+      try {
+        const trend = await trendClient.getTrendData(keyword.phrase);
+        enriched.push({ ...keyword, intent, trendScore: trend.trendScore });
+        enriched.push(...trend.related);
+      } catch (error) {
+        logger.warn('Trend enrichment failed; continuing with base keyword', { keyword: keyword.phrase, error });
+        enriched.push({ ...keyword, intent, trendScore: 0 });
+      }
     }
 
     const filtered = keywordProcessor.filterAndDeduplicate(enriched);

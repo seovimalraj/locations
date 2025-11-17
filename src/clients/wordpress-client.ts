@@ -1,3 +1,4 @@
+import { Buffer } from 'node:buffer';
 import { setTimeout as delay } from 'timers/promises';
 import { InMemoryCache } from '../services/cache.js';
 import { htmlToText, inferPageType, stripMaliciousHtml } from '../services/content-analyzer.js';
@@ -6,6 +7,7 @@ import { WordPressContent, WordPressPage } from '../types/index.js';
 
 const DEFAULT_TIMEOUT = 25_000;
 const PAGE_CACHE_TTL = 5 * 60 * 1000;
+const MAX_CONTENT_BYTES = 100_000;
 
 export interface WordPressClientOptions {
   siteUrl: string;
@@ -58,17 +60,24 @@ export class WordPressClient {
   }
 
   private sanitizePage(raw: any): WordPressPage {
-    const contentHtml = stripMaliciousHtml(raw.content?.rendered ?? '');
-    const contentText = htmlToText(contentHtml);
+    const limitedHtml = this.enforceContentLimit(stripMaliciousHtml(raw.content?.rendered ?? ''));
+    const contentText = htmlToText(limitedHtml);
     return {
       id: raw.id,
       slug: raw.slug,
       title: raw.title?.rendered ?? 'Untitled',
       path: raw.link ?? '',
-      contentHtml,
+      contentHtml: limitedHtml,
       contentText,
       pageType: inferPageType(raw.link ?? ''),
     };
+  }
+
+  private enforceContentLimit(html: string): string {
+    const buffer = Buffer.from(html);
+    if (buffer.byteLength <= MAX_CONTENT_BYTES) return html;
+    logger.warn('Truncating WordPress content to max size', { bytes: buffer.byteLength, limit: MAX_CONTENT_BYTES });
+    return buffer.subarray(0, MAX_CONTENT_BYTES).toString();
   }
 
   private paginatePath(resource: 'pages' | 'posts', page: number, perPage: number, search?: string) {
