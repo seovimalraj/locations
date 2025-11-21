@@ -13,6 +13,42 @@ const inputSchema = z.object({
   secondaryKeywords: z.array(z.object({ phrase: z.string() })).default([]),
 });
 
+export const generateContentSchema = {
+  type: 'object',
+  properties: {
+    structure: {
+      type: 'object',
+      properties: {
+        title: { type: 'string' },
+        description: { type: 'string' },
+        sections: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              heading: { type: 'string' },
+              keywords: { type: 'array', items: { type: 'string' } },
+            },
+            required: ['heading'],
+          },
+        },
+      },
+      required: ['title', 'sections'],
+    },
+    primaryKeyword: {
+      type: 'object',
+      properties: { phrase: { type: 'string' } },
+      required: ['phrase'],
+    },
+    secondaryKeywords: {
+      type: 'array',
+      items: { type: 'object', properties: { phrase: { type: 'string' } }, required: ['phrase'] },
+      default: [],
+    },
+  },
+  required: ['structure', 'primaryKeyword'],
+};
+
 export type GenerateContentInput = z.infer<typeof inputSchema>;
 
 export const generateContent = async (

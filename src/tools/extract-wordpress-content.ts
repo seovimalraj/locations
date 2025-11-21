@@ -10,6 +10,24 @@ const inputSchema = z.object({
   maxPages: z.number().int().positive().max(50).optional(),
 });
 
+export const extractWordpressSchema = {
+  type: 'object',
+  properties: {
+    siteUrl: { type: 'string', format: 'uri', description: 'Base URL of the WordPress site' },
+    pathPattern: {
+      type: 'string',
+      description: 'Regex to filter WordPress page and post URLs',
+    },
+    maxPages: {
+      type: 'integer',
+      minimum: 1,
+      maximum: 50,
+      description: 'Maximum number of pages to fetch with pagination',
+    },
+  },
+  required: ['siteUrl'],
+};
+
 export type ExtractWordpressInput = z.infer<typeof inputSchema>;
 
 export const extractWordPressContent = async (
@@ -21,7 +39,20 @@ export const extractWordPressContent = async (
   }
 
   try {
-    const pattern = parsed.data.pathPattern ? new RegExp(parsed.data.pathPattern) : undefined;
+    let pattern: RegExp | undefined;
+    if (parsed.data.pathPattern) {
+      try {
+        pattern = new RegExp(parsed.data.pathPattern);
+      } catch (regexError) {
+        return {
+          error: {
+            source: 'system',
+            message: 'Invalid pathPattern regex provided',
+            details: regexError,
+          },
+        };
+      }
+    }
     const client = new WordPressClient({
       siteUrl: parsed.data.siteUrl,
       apiKey: process.env.WORDPRESS_API_KEY,
